@@ -11,6 +11,15 @@ from concurrent.futures import ProcessPoolExecutor, TimeoutError
 from typing import Dict
 import threading
 import queue
+import multiprocessing
+
+# Windows multiprocessing compatibility fix
+# Must be set before any ProcessPoolExecutor is created
+if os.name == 'nt':  # Windows
+    try:
+        multiprocessing.set_start_method('spawn', force=True)
+    except RuntimeError:
+        pass  # Already set
 
 import matplotlib
 matplotlib.use("Agg")
@@ -98,14 +107,16 @@ def _execute_python_code_sync(code: str, workdir: str, max_memory_MB: int):
         if code_clean.startswith("```python"):
             code_clean = code_clean.split("```python")[1].split("```")[0].strip()
         
-        # memory limit
+        # memory limit (only on Unix/Linux, not available on Windows)
         memory_limit_code = f"""
-import resource
-try:
-    memory_limit_bytes = {max_memory_MB} * 1024 * 1024
-    resource.setrlimit(resource.RLIMIT_AS, (memory_limit_bytes, memory_limit_bytes))
-except (ValueError, resource.error):
-    pass
+import os
+if os.name != 'nt':  # Not Windows
+    try:
+        import resource
+        memory_limit_bytes = {max_memory_MB} * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (memory_limit_bytes, memory_limit_bytes))
+    except (ValueError, ImportError, AttributeError):
+        pass  # Resource module not available or limit not supported
 """
         code_clean = memory_limit_code + code_clean
 
