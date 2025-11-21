@@ -4,24 +4,31 @@ import random
 from typing import List, Dict, Any
 from datasets import load_dataset
 
+# Disable multiprocessing in datasets library on Windows to avoid handle errors
+if os.name == 'nt':  # Windows
+    import datasets
+    datasets.disable_caching()
+    # Force datasets to not use multiprocessing
+    os.environ['HF_DATASETS_DISABLE_PROGRESS_BARS'] = '1'
+
 
 def load_data(name: str) -> List[Dict[str, Any]]:
 
-    if name == "AIME24":    
-        dataset = load_dataset("HuggingFaceH4/aime_2024", split="train")
+    if name == "AIME24":
+        dataset = load_dataset("HuggingFaceH4/aime_2024", split="train", num_proc=1)
         data = [{"problem": each["problem"], "groundtruth": each["answer"]} for each in dataset.to_list()]
         return data
 
     elif name == "AIME25":
-        dataset = load_dataset("yentinglin/aime_2025", split="train")
+        dataset = load_dataset("yentinglin/aime_2025", split="train", num_proc=1)
         data = [{"problem": each["problem"], "groundtruth": each["answer"]} for each in dataset.to_list()]
         return data
-    
+
     elif name == "DAPO-Math-17k":
         if os.path.exists("data/math/dataset/DAPO-Math-17k.json"):
             return json.load(open("data/math/dataset/DAPO-Math-17k.json"))
         else:
-            dataset = load_dataset("BytedTsinghua-SIA/DAPO-Math-17k", split="train")
+            dataset = load_dataset("BytedTsinghua-SIA/DAPO-Math-17k", split="train", num_proc=1)
             data = dataset.to_list()
             transformed = {}
             for record in data:

@@ -4,6 +4,13 @@ import pandas as pd
 import multiprocessing
 from datasets import load_dataset
 
+# Disable multiprocessing in datasets library on Windows to avoid handle errors
+if os.name == 'nt':  # Windows
+    import datasets
+    datasets.disable_caching()
+    # Force datasets to not use multiprocessing
+    os.environ['HF_DATASETS_DISABLE_PROGRESS_BARS'] = '1'
+
 
 def load_data(dataset_name):
     """ dataset_name: {dataset}_{sample_number} """
@@ -28,7 +35,7 @@ def load_data(dataset_name):
 
 
 def load_AFM_web_RL(split="train"):
-    dataset = load_dataset("PersonalAILab/AFM-WebAgent-RL-Dataset", split=split)
+    dataset = load_dataset("PersonalAILab/AFM-WebAgent-RL-Dataset", split=split, num_proc=1)
     data = []
     for i, row in enumerate(dataset.to_list()):
         if len(row["extra_info"]["answer"]) > 1:
@@ -59,7 +66,7 @@ def sampling_AFM_web_RL(data, n, random_seed=42):
 
 
 def load_WebWalkerQA(split="main"):
-    dataset = load_dataset("callanwu/WebWalkerQA", split=split)
+    dataset = load_dataset("callanwu/WebWalkerQA", split=split, num_proc=1)
     data = []
     for i, row in enumerate(dataset.to_list()):
         level_map = {
