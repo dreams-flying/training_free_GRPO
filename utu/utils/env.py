@@ -3,7 +3,19 @@ import os
 
 from dotenv import find_dotenv, load_dotenv
 
-load_dotenv(find_dotenv(raise_error_if_not_found=True), verbose=True, override=True)
+# Load .env file if it exists, but don't raise error if not found
+# This makes the .env file optional while still supporting it when present
+dotenv_path = find_dotenv(raise_error_if_not_found=False)
+if dotenv_path:
+    load_dotenv(dotenv_path, verbose=True, override=True)
+else:
+    # Warn user if .env file is not found
+    import warnings
+    warnings.warn(
+        "No .env file found. Please create a .env file from .env.example template. "
+        "See README.md for more details.",
+        UserWarning
+    )
 
 
 class EnvUtils:
