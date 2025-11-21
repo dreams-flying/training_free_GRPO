@@ -1,3 +1,9 @@
+# Windows compatibility: must be first import
+try:
+    from training_free_grpo import _windows_compat
+except ImportError:
+    pass
+
 import os
 import json
 import argparse
