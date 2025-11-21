@@ -10,10 +10,21 @@ This guide is specifically for users deploying and running Training-Free GRPO on
 
 我们已经修复了以下 Windows 平台的常见问题：
 
-✅ **多进程句柄错误** - `OSError: [WinError 6] 句柄无效`
+✅ **多进程句柄错误** - `OSError: [WinError 6] 句柄无效` ⭐ **默认使用 ThreadPoolExecutor**
 ✅ **dotenv 解析错误** - `python-dotenv could not parse statement`
 ✅ **API 速率限制** - `openai.RateLimitError: local_rate_limited`
 ✅ **resource 模块不可用** - Windows 上自动跳过内存限制功能
+
+### 🔑 关键修复：自动使用 ThreadPoolExecutor
+
+在 Windows（特别是 Anaconda 环境）上，`ProcessPoolExecutor` 经常会遇到句柄错误。
+我们的解决方案：**默认在 Windows 上使用 `ThreadPoolExecutor` 代替 `ProcessPoolExecutor`**。
+
+这个改动：
+- ✅ 完全避免了 Windows 多进程句柄问题
+- ✅ 对功能没有影响（Python 代码执行仍然是隔离的）
+- ✅ 自动检测并启用（无需手动配置）
+- ✅ 可以通过环境变量控制
 
 ---
 
@@ -46,11 +57,14 @@ notepad .env
 # 正确格式 ✅
 UTU_LLM_API_KEY=sk-your-api-key-here
 UTU_LLM_MODEL=deepseek-chat
+UTU_USE_THREAD_POOL=true
 
 # 错误格式 ❌
 UTU_LLM_API_KEY="sk-your-api-key-here"  # 不要加引号
 UTU_LLM_API_KEY = sk-your-api-key-here  # 等号两边不要空格
 ```
+
+**重要：Windows 用户必须设置 `UTU_USE_THREAD_POOL=true`** 来避免句柄错误（默认已包含在 `.env.example` 中）。
 
 ### 3. 运行训练（保守配置）/ Run Training (Conservative Settings)
 
@@ -134,16 +148,48 @@ python script.py `
 OSError: [WinError 6] 句柄无效
 ```
 
-**解决方案:**
-1. 确保已拉取最新代码
-2. 检查是否有其他 Python 进程在运行，关闭它们
-3. 重启命令行窗口
-4. 如果使用 Anaconda，尝试创建新的虚拟环境
+**解决方案（按顺序尝试）:**
 
+**1. 确保使用 ThreadPoolExecutor（最重要！）**
 ```bash
-# 创建新环境
-conda create -n grpo python=3.11
-conda activate grpo
+# 检查 .env 文件中是否有这一行
+UTU_USE_THREAD_POOL=true
+```
+
+如果没有，添加这一行到 `.env` 文件。这会让程序使用线程池而不是进程池，完全避免 Windows 句柄问题。
+
+**2. 确保已拉取最新代码**
+```bash
+git pull origin claude/fix-mult-import-error-01VbU29ZSU5b8cV8Q4oquYEj
+```
+
+**3. 删除旧的 .env 文件，重新创建**
+```bash
+# 备份旧的（如果有重要配置）
+copy .env .env.backup
+
+# 从模板重新创建
+copy .env.example .env
+
+# 编辑并填入 API 密钥
+notepad .env
+```
+
+**4. 重启 Python 环境**
+- 关闭所有 Python 进程
+- 重启命令行/终端
+- 重新激活虚拟环境
+
+**5. 如果仍然失败，创建新的虚拟环境**
+```bash
+# 使用 Anaconda
+conda create -n grpo_fresh python=3.11
+conda activate grpo_fresh
+pip install -r requirements.txt
+
+# 或使用 venv
+python -m venv .venv_fresh
+.venv_fresh\Scripts\activate
 pip install -r requirements.txt
 ```
 

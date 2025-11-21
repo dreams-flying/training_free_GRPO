@@ -7,15 +7,19 @@ import os
 import re
 import time
 import traceback
-from concurrent.futures import ProcessPoolExecutor, TimeoutError
-from typing import Dict
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, TimeoutError
+from typing import Dict, Union
 import threading
 import queue
 import multiprocessing
 
 # Windows multiprocessing compatibility fix
-# Must be set before any ProcessPoolExecutor is created
-if os.name == 'nt':  # Windows
+# On Windows, use ThreadPoolExecutor instead of ProcessPoolExecutor to avoid handle errors
+# This is more reliable on Windows/Anaconda environments
+USE_THREAD_POOL_ON_WINDOWS = os.getenv('UTU_USE_THREAD_POOL', 'true').lower() == 'true' and os.name == 'nt'
+
+if not USE_THREAD_POOL_ON_WINDOWS and os.name == 'nt':
+    # Only set spawn mode if we're using ProcessPoolExecutor on Windows
     try:
         multiprocessing.set_start_method('spawn', force=True)
     except RuntimeError:
@@ -34,35 +38,42 @@ ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 class ProcessPoolManager:
     _instance = None
     _lock = threading.Lock()
-    
+
     def __new__(cls, max_workers: int = None):
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance._init_manager(max_workers)
             return cls._instance
-    
+
     def _init_manager(self, max_workers: int):
         if max_workers is None:
             max_workers = 1
-        
+
         self.max_workers = max_workers
         self.available_processes = queue.Queue(maxsize=max_workers)
-        self.process_pools: Dict[int, ProcessPoolExecutor] = {}
+        self.process_pools: Dict[int, Union[ProcessPoolExecutor, ThreadPoolExecutor]] = {}
         self.lock = threading.Lock()
-        
+        self.use_thread_pool = USE_THREAD_POOL_ON_WINDOWS
+
+        if self.use_thread_pool:
+            print(f"[PythonExecutor] Using ThreadPoolExecutor on Windows (safer for Anaconda environments)")
+
         for _ in range(max_workers):
-            executor = ProcessPoolExecutor(max_workers=1)
+            if self.use_thread_pool:
+                executor = ThreadPoolExecutor(max_workers=1)
+            else:
+                executor = ProcessPoolExecutor(max_workers=1)
             self.available_processes.put(executor)
             self.process_pools[id(executor)] = executor
-    
-    def acquire_process(self) -> ProcessPoolExecutor:
+
+    def acquire_process(self) -> Union[ProcessPoolExecutor, ThreadPoolExecutor]:
         try:
             return self.available_processes.get(timeout=300)
         except queue.Empty:
             raise RuntimeError("No available processes in pool")
-    
-    def release_process(self, executor: ProcessPoolExecutor):
+
+    def release_process(self, executor: Union[ProcessPoolExecutor, ThreadPoolExecutor]):
         if id(executor) in self.process_pools:
             try:
                 future = executor.submit(lambda: True)
@@ -72,10 +83,13 @@ class ProcessPoolManager:
                 with self.lock:
                     if id(executor) in self.process_pools:
                         del self.process_pools[id(executor)]
-                        new_executor = ProcessPoolExecutor(max_workers=1)
+                        if self.use_thread_pool:
+                            new_executor = ThreadPoolExecutor(max_workers=1)
+                        else:
+                            new_executor = ProcessPoolExecutor(max_workers=1)
                         self.process_pools[id(new_executor)] = new_executor
                         self.available_processes.put(new_executor)
-    
+
     def shutdown(self):
         with self.lock:
             for executor in self.process_pools.values():
