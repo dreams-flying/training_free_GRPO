@@ -112,8 +112,32 @@ def get_process_manager(max_workers: int = None) -> ProcessPoolManager:
 def _execute_python_code_sync(code: str, workdir: str, max_memory_MB: int):
     """
     Synchronous execution of Python code.
-    This function is intended to be run in a separate process.
+    This function is intended to be run in a separate process/thread.
     """
+    # CRITICAL: Disable all multiprocessing in this execution context (Windows compatibility)
+    import sys
+    import os
+
+    # Set environment variables to disable multiprocessing in all libraries
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['NUMEXPR_NUM_THREADS'] = '1'
+    os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+
+    # Prevent IPython from using multiprocessing
+    os.environ['IPYTHON_ENABLE_MULTIPROCESSING'] = '0'
+
+    # For Windows: completely disable multiprocessing module
+    if os.name == 'nt':
+        import multiprocessing
+        multiprocessing.set_start_method('spawn', force=True)
+        # Monkey-patch multiprocessing to prevent accidental usage
+        original_process = multiprocessing.Process
+        def no_process(*args, **kwargs):
+            raise RuntimeError("Multiprocessing is disabled in this context to avoid Windows handle errors")
+        multiprocessing.Process = no_process
+
     original_dir = os.getcwd()
     try:
         # Clean up code format
