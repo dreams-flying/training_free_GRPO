@@ -4,6 +4,7 @@ import copy
 import json
 import os
 import random
+import multiprocessing
 
 from training_free_grpo.main import rollout_dataset, load_rollouts
 from utu.agents import SimpleAgent
@@ -163,6 +164,15 @@ async def main(args):
 
 
 if __name__ == "__main__":
+    # Fix for Windows multiprocessing compatibility
+    multiprocessing.freeze_support()
+    # Set start method to 'spawn' for Windows compatibility
+    if os.name == 'nt':  # Windows
+        try:
+            multiprocessing.set_start_method('spawn', force=True)
+        except RuntimeError:
+            pass  # Already set
+
     parser = argparse.ArgumentParser(description="Training-free GRPO")
     parser.add_argument("--mode", type=str, default="agent", required=True, choices=["prompt", "agent"], help="Mode of inference")
     parser.add_argument("--domain", type=str, required=True, choices=["math", "web"], help="domain of the tasks (math/web)")

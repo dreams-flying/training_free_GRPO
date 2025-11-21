@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+import multiprocessing
 from datasets import load_dataset
 
 
@@ -117,6 +118,15 @@ def save_dataset(dataset_name, data):
 
 
 if __name__ == "__main__":
+    # Fix for Windows multiprocessing compatibility
+    multiprocessing.freeze_support()
+    # Set start method to 'spawn' for Windows compatibility
+    if os.name == 'nt':  # Windows
+        try:
+            multiprocessing.set_start_method('spawn', force=True)
+        except RuntimeError:
+            pass  # Already set
+
     # directly load data from huggingface with sampling
     load_data("AFM_web_RL_100")
 

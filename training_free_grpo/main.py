@@ -5,6 +5,7 @@ import asyncio
 import copy
 import time
 import traceback
+import multiprocessing
 
 from tqdm import tqdm
 from collections import defaultdict
@@ -253,6 +254,15 @@ async def main(args):
 
 
 if __name__ == "__main__":
+    # Fix for Windows multiprocessing compatibility
+    multiprocessing.freeze_support()
+    # Set start method to 'spawn' for Windows compatibility
+    if os.name == 'nt':  # Windows
+        try:
+            multiprocessing.set_start_method('spawn', force=True)
+        except RuntimeError:
+            pass  # Already set
+
     parser = argparse.ArgumentParser(description="Training-Free GRPO Evaluation")
     parser.add_argument("--mode", type=str, default="agent", required=True, choices=["prompt", "agent"], help="Mode of inference")
     parser.add_argument("--domain", type=str, required=True, choices=["math", "web"], help="The domain of the experiment")
